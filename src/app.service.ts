@@ -4,61 +4,67 @@ interface FileOperation {
   from: string;
   to: string;
   amount: number;
-  suspect?: boolean;
+
+  suspectAmount?: boolean;
+  negativeAmount?: boolean;
+  duplicatedTransaction?: boolean;
 }
 
 @Injectable()
 export class AppService {
-  mathOperation(file: string[]) {
-    let fileOperations: FileOperation[] = [];
+  private structureFile(file: string[][]): FileOperation[] {
+    let fileStructured: FileOperation[] = [];
 
-    const splittedFile = file.map((line) => line.split(';'));
+    for (let i = 1; i < file.length; i++) {
+      const dataRow = file[i];
+      const operation: any = {};
 
-    for (let i = 1; i < splittedFile.length; i++) {
-      for (let j = 0; j < splittedFile[i].length; j++) {
-        fileOperations.push({
-          from: splittedFile[i][j],
-          to: splittedFile[i][j],
-          amount: Number(splittedFile[i][j]),
-        });
+      for (let j = 0; j < dataRow.length; j++) {
+        const key = file[0][j];
+        operation[key] = key === 'amount' ? Number(dataRow[j]) : dataRow[j];
       }
+
+      fileStructured.push(operation as FileOperation);
     }
 
-    // Filter duplicated values
-    const setTest = new Set<string>();
+    return fileStructured;
+  }
 
+  processTransactions(file: Express.Multer.File) {
+    const fileName = file.originalname;
+    const fileUploadedAt = Date.now();
+    const fileAsString = file.buffer.toString();
+    const fileParsed = fileAsString.split('\n');
+    const fileSplitted = fileParsed.map((line) => line.split(';'));
+
+    const fileStructured = this.structureFile(fileSplitted);
+
+    const uniqueTransactionKeys = new Set<string>();
     const duplicatedTransactions: FileOperation[] = [];
-    const notDuplicatedTransations: FileOperation[] = [];
+    const uniqueTransactions: FileOperation[] = [];
 
-    fileOperations.map((operation) => {
-      const identifier = JSON.stringify(operation);
-      if (setTest.has(identifier)) {
-        duplicatedTransactions.push(operation);
+    fileStructured.forEach((transaction) => {
+      const transactionKey = JSON.stringify(transaction);
+
+      // Marcar transações duplicadas
+      if (uniqueTransactionKeys.has(transactionKey)) {
+        transaction.duplicatedTransaction = true;
+        duplicatedTransactions.push(transaction);
       } else {
-        setTest.add(identifier);
-        notDuplicatedTransations.push(operation);
+        uniqueTransactionKeys.add(transactionKey);
+        uniqueTransactions.push(transaction);
+      }
+
+      // Marcar transações com valores negativos
+      if (transaction.amount < 0) {
+        transaction.negativeAmount = true;
+      }
+
+      // Marcar transações suspeitas (baseado no SUSPICIOUS_THRESHOLD)
+      const suspiciousThreshold = Number(process.env.SUSPICIOUS_THRESHOLD);
+      if (transaction.amount > suspiciousThreshold) {
+        transaction.suspectAmount = true;
       }
     });
-
-    // Filter negative values
-    const operationsWithoutNegativeValues = notDuplicatedTransations.filter(
-      (operation) => operation.amount > 0,
-    );
-
-    // Include flag in case of suspect values
-    const operationsWithSuspectCases = operationsWithoutNegativeValues.map(
-      (operation) => {
-        if (operation.amount > 50_000_00) {
-          return { ...operation, suspect: true };
-        } else {
-          return operation;
-        }
-      },
-    );
-
-    operationsWithSuspectCases;
-
-    console.log(duplicatedTransactions);
-    console.log(notDuplicatedTransations);
   }
 }
