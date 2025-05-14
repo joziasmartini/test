@@ -4,15 +4,15 @@ import {
   UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';
-import { AppService } from './app.service';
 import { FileInterceptor } from '@nestjs/platform-express';
-import validateFile from './fileValidator';
+import { UploadService } from './upload.service';
+import validateFile from './file-validator';
 
-@Controller()
-export class AppController {
-  constructor(private readonly appService: AppService) {}
+@Controller('upload')
+export class UploadController {
+  constructor(private readonly uploadService: UploadService) {}
 
-  @Post('upload')
+  @Post()
   @UseInterceptors(FileInterceptor('file'))
   uploadFile(@UploadedFile() file: Express.Multer.File) {
     const { isValid, errors } = validateFile(file);
@@ -25,15 +25,8 @@ export class AppController {
       };
     }
 
-    try {
-      this.appService.processTransactions(file);
-    } catch (error) {
-      return {
-        statusCode: 500,
-        message: 'Internal server error',
-        errors: [error.message],
-      };
-    }
+    this.uploadService.processTransactions(file);
+
     return {
       statusCode: 200,
       message: 'File processed successfully',

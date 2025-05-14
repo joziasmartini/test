@@ -11,7 +11,7 @@ interface FileOperation {
 }
 
 @Injectable()
-export class AppService {
+export class UploadService {
   private structureFile(file: string[][]): FileOperation[] {
     let fileStructured: FileOperation[] = [];
 
@@ -46,7 +46,6 @@ export class AppService {
     fileStructured.forEach((transaction) => {
       const transactionKey = JSON.stringify(transaction);
 
-      // Marcar transações duplicadas
       if (uniqueTransactionKeys.has(transactionKey)) {
         transaction.duplicatedTransaction = true;
         duplicatedTransactions.push(transaction);
@@ -55,12 +54,10 @@ export class AppService {
         uniqueTransactions.push(transaction);
       }
 
-      // Marcar transações com valores negativos
       if (transaction.amount < 0) {
         transaction.negativeAmount = true;
       }
 
-      // Marcar transações suspeitas (baseado no SUSPICIOUS_THRESHOLD)
       const suspiciousThreshold = Number(process.env.SUSPICIOUS_THRESHOLD);
       if (transaction.amount > suspiciousThreshold) {
         transaction.suspectAmount = true;
