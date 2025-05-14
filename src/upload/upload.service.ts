@@ -35,7 +35,7 @@ export class UploadService {
 
   async processTransactions(file: Express.Multer.File) {
     const fileName = file.originalname;
-    const fileAsString = file.buffer.toString();
+    const fileAsString = file.buffer.toString().trim();
     const fileParsed = fileAsString.split('\n');
     const fileSplitted = fileParsed.map((line) => line.split(';'));
 
@@ -68,13 +68,17 @@ export class UploadService {
       }
 
       // Valida valores suspeitos
-      const suspiciousThreshold = Number(process.env.SUSPICIOUS_THRESHOLD);
+      const suspiciousThreshold = parseInt(
+        process.env.SUSPICIOUS_THRESHOLD || '50_000_00',
+      );
       if (Number(transaction.amount) > suspiciousThreshold) {
         transaction.suspectAmount = true;
       }
 
       transactions.push(transaction);
     });
+
+    console.log('Transactions parsed:', transactions);
 
     const fileCreated = await this.createFile(fileName);
 
@@ -83,7 +87,7 @@ export class UploadService {
       notValidOperations: [],
     };
 
-    transactions.forEach(async (transaction) => {
+    for (const transaction of transactions) {
       if (transaction.negativeAmount) {
         operationsResult.notValidOperations.push({
           operation: transaction,
@@ -97,10 +101,11 @@ export class UploadService {
         });
       }
       if (!transaction.negativeAmount && !transaction.duplicatedTransaction) {
+        console.log('Creating transaction:', transaction);
         await this.createTransaction(transaction, fileCreated.id);
         operationsResult.validOperationsCount++;
       }
-    });
+    }
 
     return operationsResult;
   }
