@@ -20,16 +20,18 @@ export class UploadService {
   }
 
   async createTransaction(dto: Transaction, fileId: number) {
-    return await this.prisma.transaction.create({
-      data: {
-        from: dto.from,
-        to: dto.to,
-        amount: dto.amount,
-        fileId: fileId,
-        suspectAmount: dto.suspectAmount || false,
-        negativeAmount: dto.negativeAmount || false,
-        duplicatedTransaction: dto.duplicatedTransaction || false,
-      },
+    return await this.prisma.$transaction(async (prisma) => {
+      return await prisma.transaction.create({
+        data: {
+          from: dto.from,
+          to: dto.to,
+          amount: dto.amount,
+          fileId: fileId,
+          suspectAmount: dto.suspectAmount || false,
+          negativeAmount: dto.negativeAmount || false,
+          duplicatedTransaction: dto.duplicatedTransaction || false,
+        },
+      });
     });
   }
 
