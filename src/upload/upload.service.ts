@@ -1,67 +1,107 @@
 import { Injectable } from '@nestjs/common';
-
-interface FileOperation {
-  from: string;
-  to: string;
-  amount: number;
-
-  suspectAmount?: boolean;
-  negativeAmount?: boolean;
-  duplicatedTransaction?: boolean;
-}
+import { Transaction } from '@prisma/client';
+import { PrismaService } from '../../prisma/prisma.service';
+import { OperationsResult } from './types';
 
 @Injectable()
 export class UploadService {
-  private structureFile(file: string[][]): FileOperation[] {
-    let fileStructured: FileOperation[] = [];
+  constructor(private prisma: PrismaService) {}
 
-    for (let i = 1; i < file.length; i++) {
-      const dataRow = file[i];
-      const operation: any = {};
+  async createFile(filename: string) {
+    const file = await this.prisma.file.create({
+      data: {
+        filename: filename,
+      },
+    });
 
-      for (let j = 0; j < dataRow.length; j++) {
-        const key = file[0][j];
-        operation[key] = key === 'amount' ? Number(dataRow[j]) : dataRow[j];
-      }
+    console.log('File created:', file);
 
-      fileStructured.push(operation as FileOperation);
-    }
-
-    return fileStructured;
+    return file;
   }
 
-  processTransactions(file: Express.Multer.File) {
+  async createTransaction(dto: Transaction, fileId: number) {
+    return await this.prisma.transaction.create({
+      data: {
+        from: dto.from,
+        to: dto.to,
+        amount: dto.amount,
+        fileId: fileId,
+        suspectAmount: dto.suspectAmount || false,
+        negativeAmount: dto.negativeAmount || false,
+        duplicatedTransaction: dto.duplicatedTransaction || false,
+      },
+    });
+  }
+
+  async processTransactions(file: Express.Multer.File) {
     const fileName = file.originalname;
-    const fileUploadedAt = Date.now();
     const fileAsString = file.buffer.toString();
     const fileParsed = fileAsString.split('\n');
     const fileSplitted = fileParsed.map((line) => line.split(';'));
 
-    const fileStructured = this.structureFile(fileSplitted);
-
+    const transactions: Transaction[] = [];
     const uniqueTransactionKeys = new Set<string>();
-    const duplicatedTransactions: FileOperation[] = [];
-    const uniqueTransactions: FileOperation[] = [];
 
-    fileStructured.forEach((transaction) => {
+    fileSplitted.slice(1).forEach((dataRow) => {
+      const operation: Partial<Transaction> = {};
+
+      // Estrutura o arquivo
+      dataRow.forEach((data, index) => {
+        const key = fileSplitted[0][index];
+        operation[key] = key === 'amount' ? Number(data) : data;
+      });
+
+      const transaction = operation as Transaction;
+
       const transactionKey = JSON.stringify(transaction);
 
+      // Valida duplicatas
       if (uniqueTransactionKeys.has(transactionKey)) {
         transaction.duplicatedTransaction = true;
-        duplicatedTransactions.push(transaction);
       } else {
         uniqueTransactionKeys.add(transactionKey);
-        uniqueTransactions.push(transaction);
       }
 
-      if (transaction.amount < 0) {
+      // Valida valores negativos
+      if (Number(transaction.amount) < 0) {
         transaction.negativeAmount = true;
       }
 
+      // Valida valores suspeitos
       const suspiciousThreshold = Number(process.env.SUSPICIOUS_THRESHOLD);
-      if (transaction.amount > suspiciousThreshold) {
+      if (Number(transaction.amount) > suspiciousThreshold) {
         transaction.suspectAmount = true;
       }
+
+      transactions.push(transaction);
     });
+
+    const fileCreated = await this.createFile(fileName);
+
+    const operationsResult: OperationsResult = {
+      validOperationsCount: 0,
+      notValidOperations: [],
+    };
+
+    transactions.forEach(async (transaction) => {
+      if (transaction.negativeAmount) {
+        operationsResult.notValidOperations.push({
+          operation: transaction,
+          error: 'Negative amount',
+        });
+      }
+      if (transaction.duplicatedTransaction) {
+        operationsResult.notValidOperations.push({
+          operation: transaction,
+          error: 'Duplicated transaction',
+        });
+      }
+      if (!transaction.negativeAmount && !transaction.duplicatedTransaction) {
+        await this.createTransaction(transaction, fileCreated.id);
+        operationsResult.validOperationsCount++;
+      }
+    });
+
+    return operationsResult;
   }
 }

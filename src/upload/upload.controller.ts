@@ -14,7 +14,7 @@ export class UploadController {
 
   @Post()
   @UseInterceptors(FileInterceptor('file'))
-  uploadFile(@UploadedFile() file: Express.Multer.File) {
+  async uploadFile(@UploadedFile() file: Express.Multer.File) {
     const { isValid, errors } = validateFile(file);
 
     if (!isValid) {
@@ -25,11 +25,20 @@ export class UploadController {
       };
     }
 
-    this.uploadService.processTransactions(file);
+    try {
+      const result = await this.uploadService.processTransactions(file);
 
-    return {
-      statusCode: 200,
-      message: 'File processed successfully',
-    };
+      return {
+        statusCode: 200,
+        message: 'File processed successfully',
+        data: result,
+      };
+    } catch (error) {
+      return {
+        statusCode: 500,
+        message: 'Error processing file',
+        error: error.message,
+      };
+    }
   }
 }
