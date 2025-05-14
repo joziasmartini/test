@@ -1,7 +1,10 @@
-import { Module } from '@nestjs/common';
-import { UploadModule } from './upload/upload.module';
+import { NestFactory } from '@nestjs/core';
+import { AppModule } from './app.module';
+import * as dotenv from 'dotenv';
+dotenv.config();
 
-@Module({
-  imports: [UploadModule],
-})
-export class AppModule {}
+async function bootstrap() {
+  const app = await NestFactory.create(AppModule);
+  await app.listen(3000);
+}
+bootstrap();
