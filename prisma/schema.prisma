@@ -7,10 +7,28 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model File {
+  id        Int      @id @default(autoincrement())
+  filename  String
+  transactions Transaction[]
+
+  createdAt DateTime @default(now())
+}
+
 model Transaction {
   id        Int      @id @default(autoincrement())
   from      String
   to        String
   amount    Decimal
+  filename String
+
+  suspectAmount             Boolean @default(false)
+  negativeAmount            Boolean @default(false)
+  duplicatedTransaction     Boolean @default(false)
+  
+  fileId                 Int       
+  file                   File      @relation(fields: [fileId], references: [id])
+
   createdAt DateTime @default(now())
+
 }
