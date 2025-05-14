@@ -20,7 +20,6 @@ model Transaction {
   from      String
   to        String
   amount    Decimal
-  filename String
 
   suspectAmount             Boolean @default(false)
   negativeAmount            Boolean @default(false)
